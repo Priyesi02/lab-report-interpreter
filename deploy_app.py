@@ -10,8 +10,8 @@ load_dotenv()
 
 st.set_page_config(page_title="AI Lab Report Interpreter", page_icon="🔬")
 st.title("🔬 AI Lab Report Interpreter")
-st.caption("Powered by AWS S3 | Week 1 Build")
-st.info("🚧 Week 1 — PDF extraction working. AI analysis coming in Week 2!")
+st.caption("Week 1 Build")
+st.info("Week 1 — PDF extraction working.")
 
 uploaded = st.file_uploader("Upload Lab Report PDF", type=["pdf"])
 
