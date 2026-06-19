@@ -6,6 +6,7 @@
 - AI Analysis
 - Personalized Recommendations
 - Follow-up Question Generation
+- Draft customised email for appointment 
 
 ## Tech Stack
 - Python
