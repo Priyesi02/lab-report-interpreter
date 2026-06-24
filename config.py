@@ -7,7 +7,7 @@ USE_OLLAMA = True       # True = Ollama (free, local, dev)
                         # False = OpenAI (paid, fast, demo day)
 USE_BEDROCK = False     # True = AWS Bedrock (Week 3 onwards)
 
-OLLAMA_MODEL = "llama3.2"
+OLLAMA_MODEL = "qwen2.5:7b"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 OPENAI_MODEL = "gpt-4o"
