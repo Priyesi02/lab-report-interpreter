@@ -9,6 +9,6 @@ boto3==1.34.131
 python-dotenv==1.0.0
 streamlit==1.35.0
 pdfplumber==0.11.0
-Pillow
+Pillow==10.4.0
 pypdf==4.2.0
 requests==2.31.0
