@@ -238,7 +238,7 @@ if uploaded:
                     st.warning("No doctors found.")
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.exception(e)
 
     finally:
         os.unlink(tmp_path)
