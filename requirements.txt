@@ -7,6 +7,5 @@ langchain-core==0.2.29
 langchain-community==0.2.10
 langchain-openai==0.1.20
 langchain-aws==0.1.16
-chromadb==0.5.5
 pypdf==4.2.0
 requests==2.31.0
