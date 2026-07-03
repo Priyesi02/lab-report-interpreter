@@ -1,0 +1,80 @@
+@tailwind base;
+@import "tailwindcss";
+
+@theme {
+  /* Colors */
+  --color-canvas: #f4f6f8;
+  --color-canvas-deep: #eef2f5;
+  --color-card: #ffffff;
+
+  --color-teal-50: #e6fffb;
+  --color-teal-100: #ccfdf5;
+  --color-teal-400: #56d9d6;
+  --color-teal-500: #47cfd1;
+  --color-teal-600: #34b8b6;
+
+  --color-ink: #111827;
+  --color-ink-soft: #374151;
+  --color-muted: #6b7280;
+  --color-faint: #9ca3af;
+  --color-line: #e5e7eb;
+
+  --color-status-success: #16a34a;
+  --color-status-success-bg: #16a34a14;
+  --color-status-warning: #ea580c;
+  --color-status-warning-bg: #ea580c14;
+  --color-status-danger: #dc2626;
+  --color-status-danger-bg: #dc262614;
+  --color-status-critical: #991b1b;
+  --color-status-critical-bg: #991b1b14;
+
+  /* Fonts */
+  --font-display: var(--font-manrope), Manrope, Inter, system-ui, sans-serif;
+  --font-body: var(--font-inter), Inter, system-ui, sans-serif;
+
+  /* Radius */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-2xl: 28px;
+
+  /* Shadows */
+  --shadow-card: 0 8px 24px rgba(17, 24, 39, 0.05);
+  --shadow-card-hover: 0 12px 32px rgba(17, 24, 39, 0.08);
+  --shadow-glow: 0 4px 14px rgba(71, 207, 209, 0.30);
+  --shadow-glow-hover: 0 6px 18px rgba(71, 207, 209, 0.40);
+
+  /* Letter spacing */
+  --tracking-tightish: -0.01em;
+  --tracking-wideish: 0.04em;
+
+  /* Animations */
+  --animate-fade-up: fadeUp 0.5s ease forwards;
+  --animate-pulse-dot: pulseDot 1.4s ease-in-out infinite;
+
+  @keyframes fadeUp {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulseDot {
+    0%,
+    100% {
+      opacity: 0.3;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
