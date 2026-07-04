@@ -2,7 +2,7 @@ import boto3
 import pdfplumber
 import os
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(".env.local")
 
 def extract_text_local(file_path):
     """

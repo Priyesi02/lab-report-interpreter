@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from dotenv import load_dotenv
 import os
-load_dotenv()
+load_dotenv(".env.local")
 
 REGION = os.getenv('AWS_REGION', 'ap-south-1')
 
