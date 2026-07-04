@@ -3,3 +3,22 @@ venv/
 __pycache__/
 *.pyc
 .faiss
+.pdf
+
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/venv/
+backend/env/
+
+# Python Cache Files
+**/__pycache__/
+*.pyc
+
+# Ignore the environment folder matching all hidden variations
+.env
+.env.local
+**/.env.local
