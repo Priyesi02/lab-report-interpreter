@@ -1,0 +1,18 @@
+[
+  {
+    "id": "appointment_cba56329223e4b2ca086d5e6360e7603",
+    "email": "tpriyesi@gmail.com",
+    "patient_name": "Ms. TAMANNA TANEJA",
+    "phone_number": "+919310758998",
+    "doctor_name": "Dr. Sharma",
+    "hospital": "Max Hospital",
+    "appointment_date": "2026-07-11",
+    "appointment_time": "11:00",
+    "specialty": "Endocrinologist",
+    "timezone": "Asia/Kolkata",
+    "status": "scheduled",
+    "day_reminder_sent": false,
+    "one_hour_reminder_sent": false,
+    "created_at": "2026-07-10T18:02:52.752610+05:30"
+  }
+]

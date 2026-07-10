@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FileSearch, Microscope, Brain, Sparkles, Check } from "lucide-react";
 import { Logo } from "../../components/ui";
-import { getAuthenticatedUser } from '@/utils/aws-cognito';
+import { getAuthenticatedUser } from "@/utils/aws-cognito";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 const steps = [
   { icon: FileSearch, label: "Reading report structural metadata" },
@@ -20,7 +22,11 @@ function dataUrlToFile(dataUrl: string, filename: string): File {
   const mime = mimeMatch ? mimeMatch[1] : "application/pdf";
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
   return new File([bytes], filename, { type: mime });
 }
 
@@ -43,12 +49,15 @@ export default function AnalyzingPage() {
     }
 
     let stepTimer: ReturnType<typeof setInterval> | null = null;
+
     async function processAnalysis() {
       const auth = await getAuthenticatedUser();
+
       if (!auth.success || !auth.email) {
-        router.replace("/dashboard");
+        router.replace("/auth/sign-in");
         return;
       }
+
       const userEmail = auth.email;
 
       let currentStep = 0;
@@ -59,38 +68,49 @@ export default function AnalyzingPage() {
 
       try {
         const file = dataUrlToFile(fileData as string, fileName as string);
+
         const formData = new FormData();
         formData.append("file", file);
         formData.append("email", userEmail);
 
-        const res = await fetch("http://127.0.0.1:8000/analyze-report", {
+        const city = localStorage.getItem("lablens_city") || "Delhi";
+        formData.append("city", city);
+
+        const res = await fetch(`${API_BASE_URL}/analyze-report`, {
           method: "POST",
           body: formData,
-          signal: AbortSignal.timeout(90000) // ✅ 90 seconds (Plenty of processing runway)
+          signal: AbortSignal.timeout(90000),
         });
 
-        if (!res.ok) throw new Error(`Analysis engine failure code ${res.status}`);
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Analysis failed ${res.status}: ${errorText}`);
+        }
+
         const data = await res.json();
 
         if (!data.health_score) {
-          const total = data.total_tests || 10;
-          const normal = data.normal_count || 8;
+          const total = data.total_tests || 1;
+          const normal = data.normal_count || 0;
           data.health_score = Math.round((normal / total) * 100);
         }
 
+        if (data.patient_name) {
+          sessionStorage.setItem("lablens_active_patient_name", data.patient_name);
+        }
+
+        sessionStorage.setItem("lablens_latest_result", JSON.stringify(data));
         sessionStorage.removeItem("lablens_pending_file_data");
         sessionStorage.removeItem("lablens_pending_file_name");
 
-        clearInterval(stepTimer);
+        if (stepTimer) clearInterval(stepTimer);
         setActiveStep(steps.length);
 
         setTimeout(() => router.push("/dashboard/results"), 600);
       } catch (err) {
         if (stepTimer) clearInterval(stepTimer);
         console.error("Analysis failed:", err);
-        setError("Network or processing timeout. Please confirm your FastAPI local engine status on port 8000.");
-      } finally {
-        if (stepTimer) clearInterval(stepTimer);
+        setError("Analysis failed. Check FastAPI backend, API keys, and terminal logs.");
       }
     }
 
@@ -112,7 +132,9 @@ export default function AnalyzingPage() {
       <div className="w-full max-w-sm relative z-10">
         {error ? (
           <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="text-center">
-            <p className="text-[14.5px] font-medium text-status-danger bg-status-danger-bg/50 p-4 rounded-xl border border-status-danger/20">{error}</p>
+            <p className="text-[14.5px] font-medium text-status-danger bg-status-danger-bg/50 p-4 rounded-xl border border-status-danger/20">
+              {error}
+            </p>
             <button
               onClick={() => router.replace("/dashboard")}
               className="mt-6 rounded-full border border-line bg-card px-6 py-2.5 text-[13.5px] font-bold text-ink shadow-sm transition hover:bg-canvas"
@@ -126,43 +148,40 @@ export default function AnalyzingPage() {
               const isDone = i < activeStep;
               const isActive = i === activeStep;
               const Icon = step.icon;
+
               return (
                 <motion.div
                   key={step.label}
                   animate={{
                     scale: isActive ? 1.01 : 1,
-                    opacity: isDone ? 0.6 : isActive ? 1 : 0.3
+                    opacity: isDone ? 0.6 : isActive ? 1 : 0.3,
                   }}
                   transition={{ duration: 0.4 }}
-                  className={`flex items-center gap-4 rounded-xl border px-4 py-4 transition-all ${isActive
+                  className={`flex items-center gap-4 rounded-xl border px-4 py-4 transition-all ${
+                    isActive
                       ? "border-teal-400 bg-white shadow-card ring-1 ring-teal-400/20"
                       : "border-line bg-card"
-                    }`}
+                  }`}
                 >
                   <div
-                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors ${isDone
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
+                      isDone
                         ? "bg-teal-500 text-white"
                         : isActive
-                          ? "bg-teal-50 text-teal-600"
-                          : "bg-canvas-deep text-faint"
-                      }`}
+                        ? "bg-teal-50 text-teal-600"
+                        : "bg-canvas-deep text-faint"
+                    }`}
                   >
-                    {isDone ? (
-                      <Check size={14} strokeWidth={3} />
-                    ) : (
-                      <Icon
-                        size={15}
-                        strokeWidth={2.5}
-                        className={isActive ? "animate-pulse" : ""}
-                      />
-                    )}
+                    {isDone ? <Check size={14} strokeWidth={3} /> : <Icon size={15} strokeWidth={2.5} className={isActive ? "animate-pulse" : ""} />}
                   </div>
+
                   <span className={`text-[13.5px] font-semibold tracking-tightish ${isActive ? "text-ink" : "text-muted"}`}>
                     {step.label}
                   </span>
                 </motion.div>
               );
             })}
+
             <div className="pt-4">
               <div className="h-[2px] w-full bg-line overflow-hidden rounded-full">
                 <motion.div
