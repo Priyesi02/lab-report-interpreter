@@ -67,53 +67,80 @@ export default function AnalyzingPage() {
       }, 1200);
 
       try {
-        const file = dataUrlToFile(fileData as string, fileName as string);
+  const file = dataUrlToFile(fileData as string, fileName as string);
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("email", userEmail);
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("email", userEmail);
 
-        const city = localStorage.getItem("lablens_city") || "Delhi";
-        formData.append("city", city);
+  const city = localStorage.getItem("lablens_city") || "Delhi";
+  formData.append("city", city);
 
-        const res = await fetch(`${API_BASE_URL}/analyze-report`, {
-          method: "POST",
-          body: formData,
-          signal: AbortSignal.timeout(90000),
-        });
+  const res = await fetch(`${API_BASE_URL}/analyze-report`, {
+    method: "POST",
+    body: formData,
+    signal: AbortSignal.timeout(90000),
+  });
 
-        if (!res.ok) {
-          const errorText = await res.text();
-          throw new Error(`Analysis failed ${res.status}: ${errorText}`);
-        }
+  console.log("HTTP Status:", res.status);
 
-        const data = await res.json();
+  const responseText = await res.text();
+  console.log("Raw Response:", responseText);
 
-        if (!data.health_score) {
-          const total = data.total_tests || 1;
-          const normal = data.normal_count || 0;
-          data.health_score = Math.round((normal / total) * 100);
-        }
+  if (!res.ok) {
+    throw new Error(`Backend Error (${res.status}): ${responseText}`);
+  }
 
-        if (data.patient_name) {
-          sessionStorage.setItem("lablens_active_patient_name", data.patient_name);
-        }
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch (e) {
+    throw new Error(`Backend returned invalid JSON:\n${responseText}`);
+  }
 
-        sessionStorage.setItem("lablens_latest_result", JSON.stringify(data));
-        sessionStorage.removeItem("lablens_pending_file_data");
-        sessionStorage.removeItem("lablens_pending_file_name");
+  console.log("Parsed Response:", data);
 
-        if (stepTimer) clearInterval(stepTimer);
-        setActiveStep(steps.length);
+  if (!data.health_score) {
+    const total = data.total_tests || 1;
+    const normal = data.normal_count || 0;
+    data.health_score = Math.round((normal / total) * 100);
+  }
 
-        setTimeout(() => router.push("/dashboard/results"), 600);
-      } catch (err) {
-        if (stepTimer) clearInterval(stepTimer);
-        console.error("Analysis failed:", err);
-        setError("Analysis failed. Check FastAPI backend, API keys, and terminal logs.");
-      }
+  if (data.patient_name) {
+    sessionStorage.setItem(
+      "lablens_active_patient_name",
+      data.patient_name
+    );
+  }
+
+  sessionStorage.setItem(
+    "lablens_latest_result",
+    JSON.stringify(data)
+  );
+
+  sessionStorage.removeItem("lablens_pending_file_data");
+  sessionStorage.removeItem("lablens_pending_file_name");
+
+  if (stepTimer) clearInterval(stepTimer);
+
+  setActiveStep(steps.length);
+
+  setTimeout(() => router.push("/dashboard/results"), 600);
+
+} catch (err: any) {
+  if (stepTimer) clearInterval(stepTimer);
+
+  console.error("========= ANALYSIS ERROR =========");
+  console.error(err);
+  console.error("==================================");
+
+  if (err instanceof Error) {
+    setError(err.message);
+  } else {
+    setError(String(err));
+  }
+}
     }
-
     processAnalysis();
 
     return () => {

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── LLM Config ──────────────────────────────────────────────
-OPENROUTER_MODEL = "meta-llama/llama-3-8b-instruct"
+OPENROUTER_MODEL = "meta-llama/llama-3.1-8b-instruct"
 
 # ── AWS Config ───────────────────────────────────────────────
 AWS_REGION = os.getenv("AWS_REGION", "us-east-2")

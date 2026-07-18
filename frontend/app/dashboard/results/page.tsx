@@ -36,6 +36,9 @@ import {
   Bell,
   X,
   Save,
+  Pill,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { Logo, Avatar, PillBadge, Card, GhostButton } from "../../components/ui";
 import { getAuthenticatedUser } from "@/utils/aws-cognito";
@@ -77,6 +80,22 @@ type Appointment = {
   one_hour_reminder_sent?: boolean;
 };
 
+type Medication = {
+  id: string;
+  email: string;
+  patient_name: string;
+  phone_number: string;
+  medicine_name: string;
+  dosage?: string;
+  times: string[];
+  start_date: string;
+  duration_days: number;
+  instructions?: string;
+  timezone?: string;
+  status: "active" | "completed" | "cancelled";
+  sent_reminders?: string[];
+};
+
 type AnalysisResult = {
   id?: string;
   file_name?: string;
@@ -108,13 +127,25 @@ const statusTone: Record<string, "danger" | "warning" | "critical" | "success"> 
   NORMAL: "success",
 };
 
+const EMPTY_MEDICATION_FORM = {
+  medicine_name: "",
+  dosage: "",
+  times: [""],
+  start_date: "",
+  duration_days: "7",
+  instructions: "",
+  phone_number: "",
+};
+
 export default function ResultsPage() {
   const router = useRouter();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<AnalysisResult[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [userEmail, setUserEmail] = useState("");
-  const [activeTab, setActiveTab] = useState<"analysis" | "questions" | "doctors" | "appointments" | "history">("analysis");
+  const [activeTab, setActiveTab] = useState<
+    "analysis" | "questions" | "doctors" | "appointments" | "medications" | "history"
+  >("analysis");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [appointmentSaving, setAppointmentSaving] = useState(false);
@@ -127,6 +158,12 @@ export default function ResultsPage() {
     phone_number: "",
     specialty: "",
   });
+
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [showMedicationModal, setShowMedicationModal] = useState(false);
+  const [medicationSaving, setMedicationSaving] = useState(false);
+  const [medicationMessage, setMedicationMessage] = useState("");
+  const [medicationForm, setMedicationForm] = useState(EMPTY_MEDICATION_FORM);
 
   useEffect(() => {
     async function loadHistory() {
@@ -161,6 +198,22 @@ export default function ResultsPage() {
           console.error("Unable to load appointments:", appointmentError);
         }
 
+        try {
+          const medicationResponse = await fetch(
+            `${API_BASE_URL}/api/medications?email=${encodeURIComponent(auth.email)}&patient_name=${encodeURIComponent(patientName)}`
+          );
+
+          if (medicationResponse.ok) {
+            const medicationData = await medicationResponse.json();
+            setMedications(
+              Array.isArray(medicationData.medications)
+                ? medicationData.medications
+                : []
+            );
+          }
+        } catch (medicationError) {
+          console.error("Unable to load medications:", medicationError);
+        }
 
         const res = await fetch(
           `${API_BASE_URL}/api/patient/history?email=${encodeURIComponent(auth.email)}&patient_name=${encodeURIComponent(patientName)}`
@@ -312,6 +365,129 @@ export default function ResultsPage() {
     );
   }
 
+  function openMedicationForm() {
+    setMedicationMessage("");
+    setMedicationForm(EMPTY_MEDICATION_FORM);
+    setShowMedicationModal(true);
+  }
+
+  function updateMedicationTime(index: number, value: string) {
+    setMedicationForm((current) => {
+      const times = [...current.times];
+      times[index] = value;
+      return { ...current, times };
+    });
+  }
+
+  function addMedicationTimeSlot() {
+    setMedicationForm((current) => ({
+      ...current,
+      times: [...current.times, ""],
+    }));
+  }
+
+  function removeMedicationTimeSlot(index: number) {
+    setMedicationForm((current) => ({
+      ...current,
+      times: current.times.filter((_, i) => i !== index),
+    }));
+  }
+
+  async function saveMedication(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!result?.patient_name || !userEmail) {
+      setMedicationMessage("Patient information is missing.");
+      return;
+    }
+
+    const cleanTimes = medicationForm.times
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    if (cleanTimes.length === 0) {
+      setMedicationMessage("Add at least one reminder time.");
+      return;
+    }
+
+    setMedicationSaving(true);
+    setMedicationMessage("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/medications`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: userEmail,
+          patient_name: result.patient_name,
+          phone_number: medicationForm.phone_number,
+          medicine_name: medicationForm.medicine_name,
+          dosage: medicationForm.dosage,
+          times: cleanTimes,
+          start_date: medicationForm.start_date,
+          duration_days: Number(medicationForm.duration_days) || 1,
+          instructions: medicationForm.instructions,
+          timezone: "Asia/Kolkata",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Could not save medication reminder.");
+      }
+
+      setMedications((current) =>
+        [...current, data.medication].sort((a, b) =>
+          a.start_date.localeCompare(b.start_date)
+        )
+      );
+
+      setMedicationMessage(
+        data.confirmation_sms_sent
+          ? "Medication reminder saved and confirmation SMS sent."
+          : "Reminder saved. SMS could not be sent; check Twilio settings."
+      );
+
+      setTimeout(() => {
+        setShowMedicationModal(false);
+        setActiveTab("medications");
+      }, 1200);
+    } catch (error) {
+      setMedicationMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not save medication reminder."
+      );
+    } finally {
+      setMedicationSaving(false);
+    }
+  }
+
+  async function cancelMedication(medicationId: string) {
+    if (!userEmail) return;
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/medications/${encodeURIComponent(medicationId)}/cancel?email=${encodeURIComponent(userEmail)}`,
+      { method: "PATCH" }
+    );
+
+    if (!response.ok) {
+      alert("Could not cancel this medication reminder.");
+      return;
+    }
+
+    setMedications((current) =>
+      current.map((medication) =>
+        medication.id === medicationId
+          ? { ...medication, status: "cancelled" }
+          : medication
+      )
+    );
+  }
+
   if (!loaded) return null;
 
   if (!result) {
@@ -403,6 +579,7 @@ export default function ResultsPage() {
             { id: "questions", label: "Doctor Prep Guide", icon: HelpCircle },
             { id: "doctors", label: "Doctors Near Me", icon: MapPin },
             { id: "appointments", label: "Appointments", icon: CalendarDays },
+            { id: "medications", label: "Medications", icon: Pill },
             { id: "history", label: "Report History", icon: Clock },
           ].map((tab) => {
             const IsActive = activeTab === tab.id;
@@ -863,6 +1040,134 @@ export default function ResultsPage() {
                 </motion.div>
               )}
 
+              {activeTab === "medications" && (
+                <motion.div
+                  key="medications"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                >
+                  <Card className="p-6 bg-white shadow-card">
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2.5">
+                        <Pill size={18} className="text-teal-500" />
+                        <h3 className="text-[16px] font-extrabold text-ink">
+                          Medication reminders
+                        </h3>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={openMedicationForm}
+                        className="inline-flex items-center gap-2 rounded-full bg-teal-500 px-4 py-2 text-[12.5px] font-bold text-white transition hover:bg-teal-600"
+                      >
+                        <Plus size={14} />
+                        Add medication
+                      </button>
+                    </div>
+
+                    <p className="mb-5 text-[13.5px] leading-relaxed text-muted">
+                      Enter the pill name and the times you need to take it. We
+                      will text you an SMS reminder at each scheduled dose time
+                      for the length of the course.
+                    </p>
+
+                    {medications.length > 0 ? (
+                      <div className="space-y-4">
+                        {medications.map((medication) => (
+                          <div
+                            key={medication.id}
+                            className={`rounded-2xl border p-5 ${
+                              medication.status === "cancelled"
+                                ? "border-line bg-canvas/40 opacity-60"
+                                : medication.status === "completed"
+                                ? "border-line bg-canvas/40"
+                                : "border-teal-200 bg-teal-50/30"
+                            }`}
+                          >
+                            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                              <div>
+                                <p className="text-[15px] font-extrabold text-ink">
+                                  {medication.medicine_name}
+                                  {medication.dosage && (
+                                    <span className="ml-2 text-[13px] font-semibold text-teal-600">
+                                      {medication.dosage}
+                                    </span>
+                                  )}
+                                </p>
+
+                                <p className="mt-2 flex flex-wrap gap-1.5">
+                                  {medication.times.map((slot) => (
+                                    <span
+                                      key={slot}
+                                      className="rounded-full bg-white px-2.5 py-1 text-[12px] font-bold text-teal-700 border border-teal-200"
+                                    >
+                                      {slot}
+                                    </span>
+                                  ))}
+                                </p>
+
+                                <p className="mt-3 text-[13px] text-muted">
+                                  Starts {medication.start_date} · {medication.duration_days} day
+                                  {medication.duration_days === 1 ? "" : "s"}
+                                </p>
+
+                                {medication.instructions && (
+                                  <p className="mt-1 text-[12.5px] text-muted italic">
+                                    {medication.instructions}
+                                  </p>
+                                )}
+
+                                <p className="mt-1 text-[12.5px] text-muted">
+                                  SMS: {medication.phone_number}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-col items-start gap-2 sm:items-end">
+                                <span
+                                  className={`rounded-full px-3 py-1 text-[11.5px] font-bold uppercase ${
+                                    medication.status === "active"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : medication.status === "completed"
+                                      ? "bg-teal-100 text-teal-700"
+                                      : "bg-slate-100 text-slate-600"
+                                  }`}
+                                >
+                                  {medication.status}
+                                </span>
+
+                                {medication.status === "active" && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      cancelMedication(medication.id)
+                                    }
+                                    className="text-[12px] font-bold text-red-600 hover:underline"
+                                  >
+                                    Stop reminders
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-line bg-canvas/30 p-8 text-center">
+                        <Pill size={28} className="mx-auto text-teal-500" />
+                        <p className="mt-3 text-[14px] font-bold text-ink">
+                          No medication reminders yet
+                        </p>
+                        <p className="mt-1 text-[13px] text-muted">
+                          Add a pill name, dosage, and dose times to get SMS
+                          reminders.
+                        </p>
+                      </div>
+                    )}
+                  </Card>
+                </motion.div>
+              )}
+
               {activeTab === "history" && (
                 <motion.div key="history" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}>
                   <Card className="p-6 bg-white shadow-card">
@@ -1060,6 +1365,219 @@ export default function ResultsPage() {
                   <Save size={16} />
                   {appointmentSaving
                     ? "Saving appointment..."
+                    : "Save and schedule SMS reminders"}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showMedicationModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm"
+            onClick={() => setShowMedicationModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              onClick={(event) => event.stopPropagation()}
+              className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/70 bg-white p-6 shadow-2xl"
+            >
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-[20px] font-extrabold text-ink">
+                    Add medication reminder
+                  </h2>
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                    Enter the pill details exactly as your doctor prescribed
+                    them. The phone number must include the country code.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMedicationModal(false)}
+                  className="rounded-full border border-line p-2 text-muted transition hover:bg-canvas"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={saveMedication} className="space-y-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-[12.5px] font-bold text-ink">
+                    Medicine name
+                  </span>
+                  <input
+                    required
+                    value={medicationForm.medicine_name}
+                    onChange={(event) =>
+                      setMedicationForm((current) => ({
+                        ...current,
+                        medicine_name: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-line bg-canvas/30 px-4 py-3 text-[14px] outline-none transition focus:border-teal-400"
+                    placeholder="Metformin"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-[12.5px] font-bold text-ink">
+                    Dosage (optional)
+                  </span>
+                  <input
+                    value={medicationForm.dosage}
+                    onChange={(event) =>
+                      setMedicationForm((current) => ({
+                        ...current,
+                        dosage: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-line bg-canvas/30 px-4 py-3 text-[14px] outline-none transition focus:border-teal-400"
+                    placeholder="500mg, 1 tablet"
+                  />
+                </label>
+
+                <div>
+                  <span className="mb-1.5 block text-[12.5px] font-bold text-ink">
+                    Reminder times
+                  </span>
+
+                  <div className="space-y-2">
+                    {medicationForm.times.map((slot, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <input
+                          required
+                          type="time"
+                          value={slot}
+                          onChange={(event) =>
+                            updateMedicationTime(index, event.target.value)
+                          }
+                          className="w-full rounded-xl border border-line bg-canvas/30 px-4 py-3 text-[14px] outline-none transition focus:border-teal-400"
+                        />
+
+                        {medicationForm.times.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeMedicationTimeSlot(index)}
+                            className="flex-shrink-0 rounded-xl border border-line p-3 text-red-600 transition hover:bg-red-50"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addMedicationTimeSlot}
+                    className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-teal-700 hover:underline"
+                  >
+                    <Plus size={13} /> Add another time
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[12.5px] font-bold text-ink">
+                      Start date
+                    </span>
+                    <input
+                      required
+                      type="date"
+                      min={new Date().toISOString().split("T")[0]}
+                      value={medicationForm.start_date}
+                      onChange={(event) =>
+                        setMedicationForm((current) => ({
+                          ...current,
+                          start_date: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-line bg-canvas/30 px-4 py-3 text-[14px] outline-none transition focus:border-teal-400"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-[12.5px] font-bold text-ink">
+                      Duration (days)
+                    </span>
+                    <input
+                      required
+                      type="number"
+                      min={1}
+                      value={medicationForm.duration_days}
+                      onChange={(event) =>
+                        setMedicationForm((current) => ({
+                          ...current,
+                          duration_days: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-line bg-canvas/30 px-4 py-3 text-[14px] outline-none transition focus:border-teal-400"
+                    />
+                  </label>
+                </div>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-[12.5px] font-bold text-ink">
+                    Instructions (optional)
+                  </span>
+                  <input
+                    value={medicationForm.instructions}
+                    onChange={(event) =>
+                      setMedicationForm((current) => ({
+                        ...current,
+                        instructions: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-line bg-canvas/30 px-4 py-3 text-[14px] outline-none transition focus:border-teal-400"
+                    placeholder="Take after food"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-[12.5px] font-bold text-ink">
+                    Patient phone number
+                  </span>
+                  <input
+                    required
+                    type="tel"
+                    value={medicationForm.phone_number}
+                    onChange={(event) =>
+                      setMedicationForm((current) => ({
+                        ...current,
+                        phone_number: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-line bg-canvas/30 px-4 py-3 text-[14px] outline-none transition focus:border-teal-400"
+                    placeholder="+919876543210"
+                  />
+                  <span className="mt-1 block text-[11.5px] text-muted">
+                    Use E.164 format, for example +919876543210.
+                  </span>
+                </label>
+
+                {medicationMessage && (
+                  <div className="rounded-xl border border-line bg-canvas/50 p-3 text-[13px] font-medium text-ink">
+                    {medicationMessage}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={medicationSaving}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-500 px-4 py-3 text-[14px] font-bold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Save size={16} />
+                  {medicationSaving
+                    ? "Saving reminder..."
                     : "Save and schedule SMS reminders"}
                 </button>
               </form>
